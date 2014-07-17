@@ -48,7 +48,6 @@
 
 #include "ethertypes.hh"
 #include "tuntap.hh"
-#include "bhfs.hh"
 
 #define BHU_THROW(str) \
 	ThrowException(Exception::Error(String::New(str)))
