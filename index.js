@@ -19,11 +19,11 @@
  *
  */
 
-var Duplex = require('stream').Duplex;
-var tuntapBind = require('../build/Release/tuntap');
+var stream = require('stream');
+var tuntapBind = require('./build/Release/tuntap');
 var util = require('util');
 
-util.inherits(tuntap, Duplex);
+util.inherits(tuntap, stream.Duplex);
 
 function tuntap(params, options) {
 	if(!(this instanceof tuntap)) {
@@ -32,7 +32,7 @@ function tuntap(params, options) {
 	
 	var self = this;
 	
-	Duplex.call(this, options);
+	stream.Duplex.call(this, options);
 	
 	//May throw error. Needs to be catched by the caller.
 	this.handle_ = new tuntapBind.tuntap(params);
@@ -126,6 +126,89 @@ tuntap.prototype.unset = function(params) {
 	return(this);
 }
 
+tuntap.muxer = function(mtu, options) {
+	if(!(this instanceof tuntap.muxer)) {
+		return(new tuntap.muxer(mtu, options));
+	}
+	
+	this.mtu = mtu;
+	this.encBuffer = new Buffer(mtu + 2);
+	
+	stream.Transform.call(this, options);
+}
+
+tuntap.demuxer = function(mtu, options) {
+	if(!(this instanceof tuntap.demuxer)) {
+		return(new tuntap.demuxer(mtu, options));
+	}
+	
+	this.mtu = mtu;
+	this.decBuffer = new Buffer(mtu + 2);
+	this.length = 0;
+	this.header = 0;
+	this.remain = 0;
+	
+	stream.Transform.call(this, options);
+}
+
+util.inherits(tuntap.muxer, stream.Transform);
+util.inherits(tuntap.demuxer, stream.Transform);
+
+tuntap.muxer.prototype._transform = function(buffer, encoding, callback) {
+	if(!Buffer.isBuffer(buffer)) {
+		buffer = new Buffer(buffer, encoding);
+	}
+	
+	this.encBuffer.writeUInt16LE(buffer.length, 0);
+	buffer.copy(this.encBuffer, 2);
+	
+	this.push(this.encBuffer.slice(0, buffer.length + 2));
+	
+	callback();
+}
+
+tuntap.demuxer.prototype._transform = function(buffer, encoding, callback) {
+	if(!Buffer.isBuffer(buffer)) {
+		buffer = new Buffer(buffer, encoding);
+	}
+	
+	var cursor = 0;
+	var copy;
+	
+	while(buffer.length - cursor > 0) {
+		if(this.header < 2) {
+			if(buffer.length >= (2 - this.header))
+				copy = (2 - this.header);
+			else
+				copy = buffer.length;
+				
+			buffer.copy(this.decBuffer, this.header, cursor);
+			this.header += copy;
+			cursor += copy;
+			
+			if(this.header == 2)
+				this.length = this.remain = this.decBuffer.readUInt16LE(0);
+			
+			continue;
+		}
+		
+		if(buffer.length >= this.remain)
+			copy = this.remain;
+		else
+			copy = buffer.length;
+		
+		buffer.copy(this.decBuffer, this.length - this.remain, cursor, cursor + copy);
+		this.remain -= copy;
+		cursor += copy;
+		
+		if(this.remain == 0) {
+			this.push(this.decBuffer.slice(0, this.length));
+			this.header = 0;
+		}
+	}
+	
+	callback();
+}
 
 module.exports = tuntap;
 
