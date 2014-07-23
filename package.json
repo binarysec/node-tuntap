@@ -1,0 +1,27 @@
+{
+  "name": "node-tuntap",
+  "version": "1.0.0",
+  "description": "Tunnel interface management in node",
+  "author": "Maxime Ferrino",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/binarysec/node-tuntap.git"
+  },
+  "keywords": [
+    "tunnel",
+    "tun",
+    "tap",
+    "tuntap",
+    "interface"
+  ],
+  "main": "./index.js",
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/binarysec/node-tuntap/issues"
+  },
+  "homepage": "https://github.com/binarysec/node-tuntap",
+  "license": "GPLv3"
+}
