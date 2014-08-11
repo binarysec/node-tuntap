@@ -90,7 +90,7 @@ v8::Handle<v8::Value> Tuntap::New(const v8::Arguments& args) {
 			ret = obj->construct(main_obj, err_str);
 			if(ret == false) {
 				obj->fd = -1;
-				return(BHU_THROW(err_str.c_str()));
+				return(TT_THROW(err_str.c_str()));
 			}
 		}
 		
@@ -197,21 +197,21 @@ Handle<Value> Tuntap::writeBuffer(const Arguments& args) {
 	Local<Value> in_buff;
 	
 	if(obj->fd == -1) {
-		return(BHU_THROW_TYPE("Object is closed and cannot be written!"));
+		return(TT_THROW_TYPE("Object is closed and cannot be written!"));
 	}
 	
 	if(args.Length() != 1) {
-		return(BHU_THROW_TYPE("Wrong number of arguments"));
+		return(TT_THROW_TYPE("Wrong number of arguments"));
 	}
 	
 	if(!args[0]->IsObject()) {
-		return(BHU_THROW_TYPE("Wrong argument type"));
+		return(TT_THROW_TYPE("Wrong argument type"));
 	}
 	
 	in_buff = args[0];
 	
 	if(!node::Buffer::HasInstance(in_buff)) {
-		return(BHU_THROW_TYPE("Wrong argument type"));
+		return(TT_THROW_TYPE("Wrong argument type"));
 	}
 	
 	in_buff = args[0];
@@ -263,12 +263,12 @@ Handle<Value> Tuntap::open(const Arguments& args) {
 	bool ret;
 	
 	if(obj->fd != -1) {
-		return(BHU_THROW_TYPE("You need to close the tunnel before opening it back!"));
+		return(TT_THROW_TYPE("You need to close the tunnel before opening it back!"));
 	}
 	
 	if(args.Length() > 0) {
 		if(!args[0]->IsObject()) {
-			return(BHU_THROW_TYPE("Wrong argument type"));
+			return(TT_THROW_TYPE("Wrong argument type"));
 		}
 		
 		main_obj = args[0]->ToObject();
@@ -277,7 +277,7 @@ Handle<Value> Tuntap::open(const Arguments& args) {
 	ret = obj->construct(main_obj, err_str);
 	if(ret == false) {
 		obj->fd = -1;
-		return(BHU_THROW_TYPE(err_str.c_str()));
+		return(TT_THROW_TYPE(err_str.c_str()));
 	}
 	
 	return(scope.Close(args.This()));
@@ -288,7 +288,7 @@ Handle<Value> Tuntap::close(const Arguments& args) {
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
 	if(obj->fd == -1) {
-		return(BHU_THROW_TYPE("The tunnel is already closed!"));
+		return(TT_THROW_TYPE("The tunnel is already closed!"));
 	}
 	
 	uv_poll_stop(&obj->uv_handle_);
@@ -311,20 +311,20 @@ Handle<Value> Tuntap::set(const Arguments& args) {
 	int tun_sock;
 	
 	if(!args[0]->IsObject()) {
-		return(BHU_THROW_TYPE("Invalid argument type"));
+		return(TT_THROW_TYPE("Invalid argument type"));
 	}
 	
 	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
 	
 	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(tun_sock < 0) {
-		return(BHU_THROW_TYPE("Call of socket() failed!"));
+		return(TT_THROW_TYPE("Call of socket() failed!"));
 	}
 	
 	main_obj = args[0]->ToObject();
 	
 	if(main_obj->Has(String::New("type")) || main_obj->Has(String::New("name"))) {
-		return(BHU_THROW_TYPE("Cannot set name and type from this function!"));
+		return(TT_THROW_TYPE("Cannot set name and type from this function!"));
 	}
 	
 	obj->objset(main_obj);
@@ -417,14 +417,14 @@ Handle<Value> Tuntap::unset(const Arguments& args) {
 	int tun_sock;
 	
 	if(!args[0]->IsArray()) {
-		return(BHU_THROW_TYPE("Invalid argument type"));
+		return(TT_THROW_TYPE("Invalid argument type"));
 	}
 	
 	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
 	
 	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(tun_sock < 0) {
-		return(BHU_THROW_TYPE("Call of socket() failed!"));
+		return(TT_THROW_TYPE("Call of socket() failed!"));
 	}
 	
 	keys_arr = Array::Cast(*args[0]);

@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef _H_BHUTILS_TUNTAP
-#define _H_BHUTILS_TUNTAP
+#ifndef _H_NODETUNTAP_TUNTAP
+#define _H_NODETUNTAP_TUNTAP
 
 #define TUNTAP_DFT_PATH			"/dev/net/tun"
 #define TUNTAP_DFT_MTU			1500

@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef _H_BHUTILS_MODULE
-#define _H_BHUTILS_MODULE
+#ifndef _H_NODETUNTAP_MODULE
+#define _H_NODETUNTAP_MODULE
 
 #include <node.h>
 #include <node_buffer.h>
@@ -49,10 +49,10 @@
 #include "ethertypes.hh"
 #include "tuntap.hh"
 
-#define BHU_THROW(str) \
+#define TT_THROW(str) \
 	ThrowException(Exception::Error(String::New(str)))
 
-#define BHU_THROW_TYPE(str) \
+#define TT_THROW_TYPE(str) \
 	ThrowException(Exception::TypeError(String::New(str)))
 
 #endif

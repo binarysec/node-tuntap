@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef _H_BHUTILS_ETHERTYPES
-#define _H_BHUTILS_ETHERTYPES
+#ifndef _H_NODETUNTAP_ETHERTYPES
+#define _H_NODETUNTAP_ETHERTYPES
 
 class EtherTypes {
 	public:
