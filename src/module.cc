@@ -24,11 +24,7 @@
 using namespace v8;
 
 void InitAll(Handle<Object> exports, Handle<Object> module) {
-	Tuntap::Init();
-	
-	exports->Set(String::NewSymbol("tuntap"),
-		FunctionTemplate::New(Tuntap::NewInstance)->GetFunction());
-
+	Tuntap::Init(module);
 }
 
 NODE_MODULE(tuntap, InitAll)

@@ -25,9 +25,6 @@ using namespace v8;
 
 Persistent<Function> Tuntap::constructor;
 
-static Persistent<String> on_read_sym;
-
-
 Tuntap::Tuntap() :
 	fd(-1),
 	mode(MODE_TUN),
@@ -50,19 +47,17 @@ Tuntap::~Tuntap() {
 		delete[] this->read_buff;
 }
 
-void Tuntap::Init() {
+void Tuntap::Init(Handle<Object> module) {
+	Isolate* isolate = Isolate::GetCurrent();
+	
 	// Prepare constructor template
-	Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-	tpl->SetClassName(String::NewSymbol("tuntap"));
+	Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
+	tpl->SetClassName(String::NewFromUtf8(isolate, "tuntap"));
 	tpl->InstanceTemplate()->SetInternalFieldCount(1);
 	
-	on_read_sym = NODE_PSYMBOL("_on_read");
-	
+	// Prototype
 #define SETFUNC(_name_) \
-	tpl->PrototypeTemplate()->Set( \
-		String::NewSymbol(#_name_), \
-		FunctionTemplate::New(_name_)->GetFunction() \
-	);
+	NODE_SET_PROTOTYPE_METHOD(tpl, #_name_, _name_);
 	SETFUNC(writeBuffer)
 	SETFUNC(open)
 	SETFUNC(close)
@@ -71,11 +66,16 @@ void Tuntap::Init() {
 	SETFUNC(stopRead)
 	SETFUNC(startRead)
 	
-	constructor = Persistent<Function>::New(tpl->GetFunction());
+#undef SETFUNC
+	
+	constructor.Reset(isolate, tpl->GetFunction());
+	
+	module->Set(String::NewFromUtf8(isolate, "exports"), tpl->GetFunction());
 }
 
-v8::Handle<v8::Value> Tuntap::New(const v8::Arguments& args) {
-	HandleScope scope;
+void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	bool ret;
 	std::string err_str;
 	Local<Object> main_obj;
@@ -90,32 +90,25 @@ v8::Handle<v8::Value> Tuntap::New(const v8::Arguments& args) {
 			ret = obj->construct(main_obj, err_str);
 			if(ret == false) {
 				obj->fd = -1;
-				return(TT_THROW(err_str.c_str()));
+				TT_THROW(err_str.c_str());
+				return;
 			}
 		}
 		
-		return(args.This());
+		args.GetReturnValue().Set(args.This());
 	}
 	else {
 		// Invoked as plain function `Tuntap(...)`, turn into construct call.
 		const int argc = 1;
 		Local<Value> argv[argc] = { args[0] };
-		return(scope.Close(constructor->NewInstance(argc, argv)));
+		Local<Function> cons = Local<Function>::New(isolate, constructor);
+		args.GetReturnValue().Set(cons->NewInstance(argc, argv));
 	}
 }
 
-Handle<Value> Tuntap::NewInstance(const Arguments& args) {
-	HandleScope scope;
-	
-	const unsigned argc = 1;
-	Handle<Value> argv[argc] = { args[0] };
-	Local<Object> instance = constructor->NewInstance(argc, argv);
-	
-	return(scope.Close(instance));
-}
-
 bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
-	HandleScope scope;
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Local<Array> keys_arr;
 	Local<Value> key;
 	Local<Value> val;
@@ -188,8 +181,9 @@ bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
 	return(true);
 }
 
-Handle<Value> Tuntap::writeBuffer(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Buffer *wbuff;
 	unsigned char *data;
@@ -197,21 +191,25 @@ Handle<Value> Tuntap::writeBuffer(const Arguments& args) {
 	Local<Value> in_buff;
 	
 	if(obj->fd == -1) {
-		return(TT_THROW_TYPE("Object is closed and cannot be written!"));
+		TT_THROW_TYPE("Object is closed and cannot be written!");
+		return;
 	}
 	
 	if(args.Length() != 1) {
-		return(TT_THROW_TYPE("Wrong number of arguments"));
+		TT_THROW_TYPE("Wrong number of arguments");
+		return;
 	}
 	
 	if(!args[0]->IsObject()) {
-		return(TT_THROW_TYPE("Wrong argument type"));
+		TT_THROW_TYPE("Wrong argument type");
+		return;
 	}
 	
 	in_buff = args[0];
 	
 	if(!node::Buffer::HasInstance(in_buff)) {
-		return(TT_THROW_TYPE("Wrong argument type"));
+		TT_THROW_TYPE("Wrong argument type");
+		return;
 	}
 	
 	in_buff = args[0];
@@ -253,22 +251,25 @@ Handle<Value> Tuntap::writeBuffer(const Arguments& args) {
 	obj->writ_buff.push_back(wbuff);
 	obj->set_write(true);
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
-Handle<Value> Tuntap::open(const Arguments& args) {
-	HandleScope scope;
-	Local<Object> main_obj = Object::New();
+void Tuntap::open(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Local<Object> main_obj = Object::New(isolate);
 	std::string err_str;
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	bool ret;
 	
 	if(obj->fd != -1) {
-		return(TT_THROW_TYPE("You need to close the tunnel before opening it back!"));
+		TT_THROW_TYPE("You need to close the tunnel before opening it back!");
+		return;
 	}
 	
 	if(args.Length() > 0) {
 		if(!args[0]->IsObject()) {
-			return(TT_THROW_TYPE("Wrong argument type"));
+			TT_THROW_TYPE("Wrong argument type");
+			return;
 		}
 		
 		main_obj = args[0]->ToObject();
@@ -277,18 +278,21 @@ Handle<Value> Tuntap::open(const Arguments& args) {
 	ret = obj->construct(main_obj, err_str);
 	if(ret == false) {
 		obj->fd = -1;
-		return(TT_THROW_TYPE(err_str.c_str()));
+		TT_THROW_TYPE(err_str.c_str());
+		return;
 	}
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
  
-Handle<Value> Tuntap::close(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::close(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
 	if(obj->fd == -1) {
-		return(TT_THROW_TYPE("The tunnel is already closed!"));
+		TT_THROW_TYPE("The tunnel is already closed!");
+		return;
 	}
 	
 	uv_poll_stop(&obj->uv_handle_);
@@ -297,11 +301,12 @@ Handle<Value> Tuntap::close(const Arguments& args) {
 	delete[] obj->read_buff;
 	obj->read_buff = NULL;
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Tuntap::set(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Local<Array> keys_arr;
 	Local<Value> key;
@@ -311,20 +316,23 @@ Handle<Value> Tuntap::set(const Arguments& args) {
 	int tun_sock;
 	
 	if(!args[0]->IsObject()) {
-		return(TT_THROW_TYPE("Invalid argument type"));
+		TT_THROW_TYPE("Invalid argument type");
+		return;
 	}
 	
 	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
 	
 	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(tun_sock < 0) {
-		return(TT_THROW_TYPE("Call of socket() failed!"));
+		TT_THROW_TYPE("Call of socket() failed!");
+		return;
 	}
 	
 	main_obj = args[0]->ToObject();
 	
-	if(main_obj->Has(String::New("type")) || main_obj->Has(String::New("name"))) {
-		return(TT_THROW_TYPE("Cannot set name and type from this function!"));
+	if(main_obj->Has(String::NewFromUtf8(isolate, "type")) || main_obj->Has(String::NewFromUtf8(isolate, "name"))) {
+		TT_THROW_TYPE("Cannot set name and type from this function!");
+		return;
 	}
 	
 	obj->objset(main_obj);
@@ -333,22 +341,22 @@ Handle<Value> Tuntap::set(const Arguments& args) {
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
 		key = keys_arr->Get(i);
 		val = main_obj->Get(key);
-		String::AsciiValue key_str(key->ToString());
+		String::Utf8Value key_str(key->ToString());
 		
 		if(strcmp(*key_str, "addr") == 0) {
-			String::AsciiValue val_str(val->ToString());
+			String::Utf8Value val_str(val->ToString());
 			obj->addr = *val_str;
 			if(obj->fd)
 				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_addr, obj->addr.c_str(), 0, SIOCSIFADDR);
 		}
 		else if(strcmp(*key_str, "mask") == 0) {
-			String::AsciiValue val_str(val->ToString());
+			String::Utf8Value val_str(val->ToString());
 			obj->mask = *val_str;
 			if(obj->fd)
 				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_netmask, obj->mask.c_str(), 0, SIOCSIFNETMASK);
 		}
 		else if(strcmp(*key_str, "dest") == 0) {
-			String::AsciiValue val_str(val->ToString());
+			String::Utf8Value val_str(val->ToString());
 			obj->dest = *val_str;
 			if(obj->fd)
 				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_dstaddr, obj->dest.c_str(), 0, SIOCSIFDSTADDR);
@@ -392,7 +400,7 @@ Handle<Value> Tuntap::set(const Arguments& args) {
 			}
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
-			String::AsciiValue val_str(val->ToString());
+			String::Utf8Value val_str(val->ToString());
 			
 			if(strcmp(*val_str, "none") == 0)
 				obj->ethtype_comp = TUNTAP_ETCOMP_NONE;
@@ -405,11 +413,12 @@ Handle<Value> Tuntap::set(const Arguments& args) {
 	
 	::close(tun_sock);
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Tuntap::unset(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Local<Array> keys_arr;
 	Local<Value> val;
@@ -417,21 +426,23 @@ Handle<Value> Tuntap::unset(const Arguments& args) {
 	int tun_sock;
 	
 	if(!args[0]->IsArray()) {
-		return(TT_THROW_TYPE("Invalid argument type"));
+		TT_THROW_TYPE("Invalid argument type");
+		return;
 	}
 	
 	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
 	
 	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if(tun_sock < 0) {
-		return(TT_THROW_TYPE("Call of socket() failed!"));
+		TT_THROW_TYPE("Call of socket() failed!");
+		return;
 	}
 	
-	keys_arr = Array::Cast(*args[0]);
+	keys_arr = args[0].As<Array>();
 	
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
 		val = keys_arr->Get(i);
-		String::AsciiValue val_str(val->ToString());
+		String::Utf8Value val_str(val->ToString());
 		
 		if(strcmp(*val_str, "addr") == 0) {
 			obj->addr = "";
@@ -478,25 +489,27 @@ Handle<Value> Tuntap::unset(const Arguments& args) {
 	
 	::close(tun_sock);
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Tuntap::stopRead(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::stopRead(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
 	obj->set_read(false);
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Tuntap::startRead(const Arguments& args) {
-	HandleScope scope;
+void Tuntap::startRead(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
 	obj->set_read(true);
 	
-	return(scope.Close(args.This()));
+	args.GetReturnValue().Set(args.This());
 }
 
 void Tuntap::objset(Handle<Object> obj) {
@@ -508,8 +521,8 @@ void Tuntap::objset(Handle<Object> obj) {
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
 		key = keys_arr->Get(i);
 		val = obj->Get(key);
-		String::AsciiValue key_str(key->ToString());
-		String::AsciiValue val_str(val->ToString());
+		String::Utf8Value key_str(key->ToString());
+		String::Utf8Value val_str(val->ToString());
 		
 		if(strcmp(*key_str, "type") == 0) {
 			if(strcmp(*val_str, "tun") == 0) {
@@ -546,7 +559,7 @@ void Tuntap::objset(Handle<Object> obj) {
 			this->is_running = val->ToBoolean()->Value();
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
-			String::AsciiValue val_str(val->ToString());
+			String::Utf8Value val_str(val->ToString());
 			
 			if(strcmp(*val_str, "none") == 0)
 				this->ethtype_comp = TUNTAP_ETCOMP_NONE;
@@ -609,7 +622,10 @@ void Tuntap::set_write(bool w) {
 
 
 void Tuntap::do_read() {
-	node::Buffer *ret_buff;
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	
+	Local<Object> ret_buff;
 	int ret;
 	
 	ret = read(this->fd, this->read_buff, this->mtu + 4);
@@ -619,28 +635,29 @@ void Tuntap::do_read() {
 	}
 	
 	if(this->ethtype_comp == TUNTAP_ETCOMP_NONE) {
-		ret_buff = node::Buffer::New((const char*) this->read_buff, ret);
+		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff, ret);
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
-		ret_buff = node::Buffer::New((const char*) this->read_buff + 2, ret - 2);
+		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff + 2, ret - 2);
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
-		ret_buff = node::Buffer::New((const char*) this->read_buff + 3, ret - 3);
+		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff + 3, ret - 3);
 	}
 	else {
-		ret_buff = node::Buffer::New((const char*) this->read_buff, ret);
+		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff, ret);
 	}
 	
 	const int argc = 1;
 	Local<Value> argv[argc] = {
-		*ret_buff->handle_
+		ret_buff
 	};
 	
 	node::MakeCallback(
-		this->handle_,
-		on_read_sym,
+		isolate,
+		this->handle(isolate),
+		"_on_read",
 		argc,
 		argv
 	);

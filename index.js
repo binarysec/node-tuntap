@@ -35,7 +35,7 @@ function tuntap(params, options) {
 	stream.Duplex.call(this, options);
 	
 	//May throw error. Needs to be catched by the caller.
-	this.handle_ = new tuntapBind.tuntap(params);
+	this.handle_ = new tuntapBind(params);
 	
 	this.is_open = true;
 	

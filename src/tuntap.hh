@@ -30,8 +30,7 @@
 
 class Tuntap : public node::ObjectWrap {
 	public:
-		static void Init();
-		static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
+		static void Init(v8::Handle<v8::Object> module);
 		
 	private:
 		Tuntap();
@@ -75,17 +74,17 @@ class Tuntap : public node::ObjectWrap {
 		
 		bool construct(v8::Handle<v8::Object> main_obj, std::string &error);
 		void objset(v8::Handle<v8::Object> obj);
-		static v8::Handle<v8::Value> writeBuffer(const v8::Arguments& args);
-		static v8::Handle<v8::Value> open(const v8::Arguments& args);
-		static v8::Handle<v8::Value> close(const v8::Arguments& args);
-		static v8::Handle<v8::Value> set(const v8::Arguments& args);
-		static v8::Handle<v8::Value> unset(const v8::Arguments& args);
-		static v8::Handle<v8::Value> stopRead(const v8::Arguments& args);
-		static v8::Handle<v8::Value> startRead(const v8::Arguments& args);
+		static void writeBuffer(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void open(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void close(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void set(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void unset(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void stopRead(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void startRead(const v8::FunctionCallbackInfo<v8::Value>& args);
 		
 		static void uv_event_cb(uv_poll_t* handle, int status, int events);
 		
-		static v8::Handle<v8::Value> New(const v8::Arguments& args);
+		static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static v8::Persistent<v8::Function> constructor;
 		
 		template <typename T>
@@ -101,7 +100,8 @@ class Tuntap : public node::ObjectWrap {
 		static bool do_ifreq(int fd, struct ifreq *ifr, T *field, std::string addr, int port, int opt) {
 			if(addr.size() > 0) {
 				struct sockaddr_in sai;
-				sai = uv_ip4_addr(addr.c_str(), port);
+				if(uv_ip4_addr(addr.c_str(), port, &sai) != 0)
+					return(false);
 				memcpy(field, &sai, sizeof(sai));
 				return(Tuntap::do_ioctl(fd, opt, ifr));
 			}

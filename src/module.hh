@@ -24,6 +24,8 @@
 
 #include <node.h>
 #include <node_buffer.h>
+#include <node_object_wrap.h>
+#include <node/uv.h>
 
 #include <deque>
 #include <string>
@@ -50,10 +52,10 @@
 #include "tuntap.hh"
 
 #define TT_THROW(str) \
-	ThrowException(Exception::Error(String::New(str)))
+	isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, str)))
 
 #define TT_THROW_TYPE(str) \
-	ThrowException(Exception::TypeError(String::New(str)))
+	isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, str)))
 
 #endif
 
