@@ -634,20 +634,37 @@ void Tuntap::do_read() {
 		printf("PHAYL1\n");
 	}
 	
+#if defined(V8_MAJOR_VERSION) && (V8_MAJOR_VERSION > 4 || (V8_MAJOR_VERSION == 4 && defined(V8_MINOR_VERSION) && V8_MINOR_VERSION >= 3))
 	if(this->ethtype_comp == TUNTAP_ETCOMP_NONE) {
-		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff, ret);
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret).ToLocalChecked();
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
-		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff + 2, ret - 2);
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 2, ret - 2).ToLocalChecked();
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
-		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff + 3, ret - 3);
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 3, ret - 3).ToLocalChecked();
 	}
 	else {
-		ret_buff = node::Buffer::New(isolate, (const char*) this->read_buff, ret);
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret).ToLocalChecked();
 	}
+#else
+	if(this->ethtype_comp == TUNTAP_ETCOMP_NONE) {
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret);
+	}
+	else if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 2, ret - 2);
+	}
+	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
+		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
+		this->read_buff[3] = etval;
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 3, ret - 3);
+	}
+	else {
+		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret);
+	}
+#endif
 	
 	const int argc = 1;
 	Local<Value> argv[argc] = {
