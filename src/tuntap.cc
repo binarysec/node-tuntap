@@ -140,10 +140,7 @@ bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
 	else if(this->mode == MODE_TAP)
 		ifr.ifr_flags |= IFF_TAP;
 	
-	if(this->itf_name.size() > 0)
-		MK_IOCTL(this->fd, TUNSETIFF, &ifr)
-	
-	MK_IOCTL(this->fd, TUNGETIFF, &ifr)
+	MK_IOCTL(this->fd, TUNSETIFF, &ifr)
 	if(strlen(ifr.ifr_name) > 0)
 		this->itf_name = ifr.ifr_name;
 	
