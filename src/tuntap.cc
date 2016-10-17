@@ -589,11 +589,11 @@ void Tuntap::ifreq_prep(struct ifreq *ifr, const char *itf_name) {
 void Tuntap::uv_event_cb(uv_poll_t* handle, int status, int events) {
 	Tuntap *obj = static_cast<Tuntap*>(handle->data);
 	
-	if(events | UV_READABLE) {
+	if(events & UV_READABLE) {
 		obj->do_read();
 	}
 	
-	if(events | UV_WRITABLE) {
+	if(events & UV_WRITABLE) {
 		obj->do_write();
 	}
 }
