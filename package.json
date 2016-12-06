@@ -23,5 +23,6 @@
     "url": "https://github.com/binarysec/node-tuntap/issues"
   },
   "homepage": "https://github.com/binarysec/node-tuntap",
-  "license": "GPLv3"
+  "license": "GPLv3",
+  "os" : [ "!win32" ]
 }
