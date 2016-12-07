@@ -25,7 +25,7 @@
 #include <node.h>
 #include <node_buffer.h>
 #include <node_object_wrap.h>
-#include <node/uv.h>
+#include <uv.h>
 
 #include <deque>
 #include <string>
