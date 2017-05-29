@@ -48,7 +48,7 @@ Tuntap::~Tuntap() {
 }
 
 void Tuntap::Init(Handle<Object> module) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = module->GetIsolate();
 	
 	// Prepare constructor template
 	Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
@@ -74,7 +74,7 @@ void Tuntap::Init(Handle<Object> module) {
 }
 
 void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	bool ret;
 	std::string err_str;
@@ -102,12 +102,12 @@ void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
 		const int argc = 1;
 		Local<Value> argv[argc] = { args[0] };
 		Local<Function> cons = Local<Function>::New(isolate, constructor);
-		args.GetReturnValue().Set(cons->NewInstance(argc, argv));
+		args.GetReturnValue().Set(NVM_NEW_INSTANCE(cons, isolate, argc, argv));
 	}
 }
 
 bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = main_obj->GetIsolate();
 	HandleScope scope(isolate);
 	Local<Array> keys_arr;
 	Local<Value> key;
@@ -179,7 +179,7 @@ bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
 }
 
 void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Buffer *wbuff;
@@ -251,7 +251,7 @@ void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(args.This());
 }
 void Tuntap::open(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Local<Object> main_obj = Object::New(isolate);
 	std::string err_str;
@@ -283,7 +283,7 @@ void Tuntap::open(const FunctionCallbackInfo<Value>& args) {
 }
  
 void Tuntap::close(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
@@ -302,7 +302,7 @@ void Tuntap::close(const FunctionCallbackInfo<Value>& args) {
 }
 
 void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Local<Array> keys_arr;
@@ -414,7 +414,7 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 }
 
 void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	Local<Array> keys_arr;
@@ -490,7 +490,7 @@ void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
 }
 
 void Tuntap::stopRead(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
@@ -500,7 +500,7 @@ void Tuntap::stopRead(const FunctionCallbackInfo<Value>& args) {
 }
 
 void Tuntap::startRead(const FunctionCallbackInfo<Value>& args) {
-	Isolate* isolate = Isolate::GetCurrent();
+	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	
@@ -632,34 +632,28 @@ void Tuntap::do_read() {
 	}
 	
 #if defined(V8_MAJOR_VERSION) && (V8_MAJOR_VERSION > 4 || (V8_MAJOR_VERSION == 4 && defined(V8_MINOR_VERSION) && V8_MINOR_VERSION >= 3))
-	if(this->ethtype_comp == TUNTAP_ETCOMP_NONE) {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret).ToLocalChecked();
-	}
-	else if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 2, ret - 2).ToLocalChecked();
+	if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 2, ret - 2).ToLocalChecked();
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 3, ret - 3).ToLocalChecked();
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 3, ret - 3).ToLocalChecked();
 	}
-	else {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret).ToLocalChecked();
+	else { /* Also matches TUNTAP_ETCOMP_NONE */
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff, ret).ToLocalChecked();
 	}
 #else
-	if(this->ethtype_comp == TUNTAP_ETCOMP_NONE) {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret);
-	}
-	else if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 2, ret - 2);
+	if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 2, ret - 2);
 	}
 	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff + 3, ret - 3);
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 3, ret - 3);
 	}
-	else {
-		ret_buff = node::Buffer::New(isolate, (char*) this->read_buff, ret);
+	else { /* Also matches TUNTAP_ETCOMP_NONE */
+		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff, ret);
 	}
 #endif
 	

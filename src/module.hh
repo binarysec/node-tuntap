@@ -57,5 +57,10 @@
 #define TT_THROW_TYPE(str) \
 	isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, str)))
 
-#endif
+#define NVM_NEW_INSTANCE(target, isolate, argc, argv) ( \
+	(target) \
+	->NewInstance(isolate->GetCurrentContext(), argc, argv) \
+	.FromMaybe(Local<Object>()) \
+)
 
+#endif
