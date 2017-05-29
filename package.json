@@ -1,6 +1,6 @@
 {
   "name": "node-tuntap",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Tunnel interface management in node",
   "author": "Maxime Ferrino",
   "repository": {
