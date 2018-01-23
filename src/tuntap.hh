@@ -22,11 +22,7 @@
 #ifndef _H_NODETUNTAP_TUNTAP
 #define _H_NODETUNTAP_TUNTAP
 
-#define TUNTAP_DFT_PATH			"/dev/net/tun"
-#define TUNTAP_DFT_MTU			1500
-#define TUNTAP_DFT_PERSIST		true
-#define TUNTAP_DFT_UP			true
-#define TUNTAP_DFT_RUNNING		true
+#include "tuntap-itf/tuntap-itf.hh"
 
 class Tuntap : public node::ObjectWrap {
 	public:
@@ -66,12 +62,6 @@ class Tuntap : public node::ObjectWrap {
 			int size;
 		};
 		
-		enum tuntap_etcomp_t {
-			TUNTAP_ETCOMP_NONE,
-			TUNTAP_ETCOMP_HALF,
-			TUNTAP_ETCOMP_FULL,
-		};
-		
 		bool construct(v8::Handle<v8::Object> main_obj, std::string &error);
 		void objset(v8::Handle<v8::Object> obj);
 		static void writeBuffer(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -87,30 +77,6 @@ class Tuntap : public node::ObjectWrap {
 		static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static v8::Persistent<v8::Function> constructor;
 		
-		template <typename T>
-		static bool do_ioctl(int fd, int opt, T data) {
-				int ret;
-				ret = ioctl(fd, opt, data);
-				if(ret < 0)
-					return(false);
-				return(true);
-			}
-		
-		template <typename T>
-		static bool do_ifreq(int fd, struct ifreq *ifr, T *field, std::string addr, int port, int opt) {
-			if(addr.size() > 0) {
-				struct sockaddr_in sai;
-				if(uv_ip4_addr(addr.c_str(), port, &sai) != 0)
-					return(false);
-				memcpy(field, &sai, sizeof(sai));
-				return(Tuntap::do_ioctl(fd, opt, ifr));
-			}
-			
-			return(false);
-		}
-		
-		static void ifreq_prep(struct ifreq *ifr, const char *itf_name);
-		
 		void set_read(bool r);
 		void set_write(bool w);
 		
@@ -119,20 +85,7 @@ class Tuntap : public node::ObjectWrap {
 		
 		int fd;
 		
-		enum {
-			MODE_TUN,
-			MODE_TAP,
-		} mode;
-		
-		std::string itf_name;
-		std::string addr;
-		std::string dest;
-		std::string mask;
-		int mtu;
-		bool is_persistant;
-		bool is_up;
-		bool is_running;
-		tuntap_etcomp_t ethtype_comp;
+		tuntap_itf_opts_t itf_opts;
 		
 		unsigned char *read_buff;
 		std::deque<Buffer*> writ_buff;

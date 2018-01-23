@@ -19,39 +19,13 @@
  *
  */
 
-#ifndef _H_NODETUNTAP_MODULE
-#define _H_NODETUNTAP_MODULE
-
-#include <node.h>
-#include <node_buffer.h>
-#include <node_object_wrap.h>
-#include <uv.h>
-
-#include <deque>
-#include <string>
-#include <map>
-
-#include <cstdio>
-#include <cstring>
-#include <cstdlib>
-#include <cerrno>
-#include <cmath>
-
-#include <unistd.h>
-
-#include "ethertypes.hh"
-#include "tuntap.hh"
-
-#define TT_THROW(str) \
-	isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, str)))
-
-#define TT_THROW_TYPE(str) \
-	isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, str)))
-
-#define NVM_NEW_INSTANCE(target, isolate, argc, argv) ( \
-	(target) \
-	->NewInstance(isolate->GetCurrentContext(), argc, argv) \
-	.FromMaybe(Local<Object>()) \
-)
-
+#if defined(__APPLE__)
+#error "Apple OSes are not supported for now"
+#elif defined(__linux__)
+#include "tuntap-itf-linux.inc.cc"
+#elif defined(__unix__) || defined(_POSIX_VERSION)
+/* This may not work, but still, try... */
+#include "tuntap-itf-linux.inc.cc"
+#else
+#error "Your operating system does not seems to be supported"
 #endif

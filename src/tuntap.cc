@@ -27,12 +27,6 @@ Persistent<Function> Tuntap::constructor;
 
 Tuntap::Tuntap() :
 	fd(-1),
-	mode(MODE_TUN),
-	mtu(TUNTAP_DFT_MTU),
-	is_persistant(TUNTAP_DFT_PERSIST),
-	is_up(TUNTAP_DFT_UP),
-	is_running(TUNTAP_DFT_RUNNING),
-	ethtype_comp(TUNTAP_ETCOMP_NONE),
 	read_buff(NULL),
 	is_reading(true),
 	is_writing(false)
@@ -115,61 +109,10 @@ bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
 	
 	this->objset(main_obj);
 	
-	#define RETURN(_e) { error = std::string(_e) + " : " + strerror(errno); return(false); }
+	if(!tuntapItfCreate(this->itf_opts, &this->fd, &error))
+		return(false);
 	
-	#define MK_IOCTL(fd, opt, data) {\
-		if(Tuntap::do_ioctl(fd, opt, data) == false) \
-			RETURN("Error calling ioctl (" #opt ")") \
-	}
-	
-	#define MK_IFREQ_ADDR_IOCTL(fd, ifr_field, this_field, opt) \
-	if(Tuntap::do_ifreq(fd, &ifr, &ifr.ifr_field, this->this_field, 0, opt) == false) \
-		RETURN("Error calling ioctl (" #opt ")") \
-	
-	struct ifreq ifr;
-	int tun_sock;
-	
-	/* First open the device */
-	if((this->fd = ::open(TUNTAP_DFT_PATH, O_RDWR)) < 0)
-		RETURN("Cannot open " TUNTAP_DFT_PATH)
-	
-	Tuntap::ifreq_prep(&ifr, this->itf_name.c_str());
-	
-	if(this->mode == MODE_TUN)
-		ifr.ifr_flags |= IFF_TUN;
-	else if(this->mode == MODE_TAP)
-		ifr.ifr_flags |= IFF_TAP;
-	
-	MK_IOCTL(this->fd, TUNSETIFF, &ifr)
-	if(strlen(ifr.ifr_name) > 0)
-		this->itf_name = ifr.ifr_name;
-	
-	MK_IOCTL(this->fd, TUNSETPERSIST, this->is_persistant?1:0)
-	
-	/* Then open a socket to change device parameters */
-	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if(tun_sock < 0)
-		RETURN("Call of socket() failed!");
-	
-	ifr.ifr_mtu = this->mtu;
-	MK_IOCTL(tun_sock, SIOCSIFMTU, &ifr)
-	
-	if(this->addr.size() > 0) {
-		MK_IFREQ_ADDR_IOCTL(tun_sock, ifr_addr, addr, SIOCSIFADDR)
-		MK_IFREQ_ADDR_IOCTL(tun_sock, ifr_netmask, mask, SIOCSIFNETMASK)
-		MK_IFREQ_ADDR_IOCTL(tun_sock, ifr_dstaddr, dest, SIOCSIFDSTADDR)
-	}
-	
-	ifr.ifr_flags |= (this->is_up ? IFF_UP : 0) | (this->is_running ? IFF_RUNNING : 0);
-	MK_IOCTL(tun_sock, SIOCSIFFLAGS, &ifr)
-	
-	::close(tun_sock);
-	
-	this->read_buff = new unsigned char[this->mtu + 4];
-	
-	#undef RETURN
-	#undef MK_IOCTL
-	#undef MK_IFREQ_ADDR_IOCTL
+	this->read_buff = new unsigned char[this->itf_opts.mtu + 4];
 	
 	uv_poll_init(uv_default_loop(), &this->uv_handle_, this->fd);
 	this->uv_handle_.data = this;
@@ -214,10 +157,10 @@ void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
 	data = reinterpret_cast<unsigned char*>(node::Buffer::Data(in_buff));
 	data_length = node::Buffer::Length(in_buff);
 	
-	if(obj->ethtype_comp == TUNTAP_ETCOMP_NONE) {
+	if(obj->itf_opts.ethtype_comp == TUNTAP_ETCOMP_NONE) {
 		wbuff = new Buffer(data, data_length);
 	}
-	else if(obj->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+	else if(obj->itf_opts.ethtype_comp == TUNTAP_ETCOMP_HALF) {
 		wbuff = new Buffer(data_length + 2);
 		wbuff->data[0] = 0;
 		wbuff->data[1] = 0;
@@ -227,7 +170,7 @@ void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
 			data_length
 		);
 	}
-	else if(obj->ethtype_comp == TUNTAP_ETCOMP_FULL) {
+	else if(obj->itf_opts.ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint32_t type = htobe32(EtherTypes::getType(data[0]));
 		wbuff = new Buffer(data_length + 3);
 		memcpy(
@@ -305,23 +248,15 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
+	std::vector<tuntap_itf_opts_t::option_e> options;
+	std::string err_str;
 	Local<Array> keys_arr;
 	Local<Value> key;
 	Local<Value> val;
 	Local<Object> main_obj;
-	struct ifreq ifr;
-	int tun_sock;
 	
 	if(!args[0]->IsObject()) {
 		TT_THROW_TYPE("Invalid argument type");
-		return;
-	}
-	
-	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
-	
-	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if(tun_sock < 0) {
-		TT_THROW_TYPE("Call of socket() failed!");
 		return;
 	}
 	
@@ -341,74 +276,49 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 		String::Utf8Value key_str(key->ToString());
 		
 		if(strcmp(*key_str, "addr") == 0) {
-			String::Utf8Value val_str(val->ToString());
-			obj->addr = *val_str;
 			if(obj->fd)
-				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_addr, obj->addr.c_str(), 0, SIOCSIFADDR);
+				options.push_back(tuntap_itf_opts_t::OPT_ADDR);
 		}
 		else if(strcmp(*key_str, "mask") == 0) {
-			String::Utf8Value val_str(val->ToString());
-			obj->mask = *val_str;
 			if(obj->fd)
-				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_netmask, obj->mask.c_str(), 0, SIOCSIFNETMASK);
+				options.push_back(tuntap_itf_opts_t::OPT_MASK);
 		}
 		else if(strcmp(*key_str, "dest") == 0) {
-			String::Utf8Value val_str(val->ToString());
-			obj->dest = *val_str;
 			if(obj->fd)
-				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_dstaddr, obj->dest.c_str(), 0, SIOCSIFDSTADDR);
+				options.push_back(tuntap_itf_opts_t::OPT_DEST);
 		}
 		else if(strcmp(*key_str, "mtu") == 0) {
-			int val_int(val->ToInteger()->Value());
-			obj->mtu = val_int;
 			if(obj->fd)
-				Tuntap::do_ioctl(tun_sock, SIOCSIFMTU, obj->mtu);
+				options.push_back(tuntap_itf_opts_t::OPT_MTU);
 		}
 		else if(strcmp(*key_str, "persist") == 0) {
-			bool val_bool(val->ToBoolean()->Value());
-			obj->is_persistant = val_bool;
 			if(obj->fd)
-				Tuntap::do_ioctl(tun_sock, TUNSETPERSIST, obj->is_persistant?1:0);
+				options.push_back(tuntap_itf_opts_t::OPT_PERSIST);
 		}
 		else if(strcmp(*key_str, "up") == 0) {
-			bool val_bool(val->ToBoolean()->Value());
-			obj->is_up = val_bool;
-			
-			if(obj->fd) {
-				Tuntap::do_ioctl(tun_sock, SIOCGIFFLAGS, &ifr);
-				if(obj->is_up)
-					ifr.ifr_flags |= IFF_UP;
-				else
-					ifr.ifr_flags &= ~(IFF_UP);
-				Tuntap::do_ioctl(tun_sock, SIOCSIFFLAGS, &ifr);
-			}
+			if(obj->fd)
+				options.push_back(tuntap_itf_opts_t::OPT_UP);
 		}
 		else if(strcmp(*key_str, "running") == 0) {
-			bool val_bool(val->ToBoolean()->Value());
-			obj->is_running = val_bool;
-			
-			if(obj->fd) {
-				Tuntap::do_ioctl(tun_sock, SIOCGIFFLAGS, &ifr);
-				if(obj->is_running)
-					ifr.ifr_flags |= IFF_RUNNING;
-				else
-					ifr.ifr_flags &= ~(IFF_RUNNING);
-				Tuntap::do_ioctl(tun_sock, SIOCSIFFLAGS, &ifr);
-			}
+			if(obj->fd)
+				options.push_back(tuntap_itf_opts_t::OPT_RUNNING);
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
 			String::Utf8Value val_str(val->ToString());
 			
 			if(strcmp(*val_str, "none") == 0)
-				obj->ethtype_comp = TUNTAP_ETCOMP_NONE;
+				obj->itf_opts.ethtype_comp = TUNTAP_ETCOMP_NONE;
 			else if(strcmp(*val_str, "half") == 0)
-				obj->ethtype_comp = TUNTAP_ETCOMP_HALF;
+				obj->itf_opts.ethtype_comp = TUNTAP_ETCOMP_HALF;
 			else if(strcmp(*val_str, "full") == 0)
-				obj->ethtype_comp = TUNTAP_ETCOMP_FULL;
+				obj->itf_opts.ethtype_comp = TUNTAP_ETCOMP_FULL;
 		}
 	}
 	
-	::close(tun_sock);
+	if(!tuntapItfSet(options, obj->itf_opts, &err_str)) {
+		TT_THROW_TYPE(err_str.c_str());
+		return;
+	}
 	
 	args.GetReturnValue().Set(args.This());
 }
@@ -417,21 +327,13 @@ void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
+	std::vector<tuntap_itf_opts_t::option_e> options;
+	std::string err_str;
 	Local<Array> keys_arr;
 	Local<Value> val;
-	struct ifreq ifr;
-	int tun_sock;
 	
 	if(!args[0]->IsArray()) {
 		TT_THROW_TYPE("Invalid argument type");
-		return;
-	}
-	
-	Tuntap::ifreq_prep(&ifr, obj->itf_name.c_str());
-	
-	tun_sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if(tun_sock < 0) {
-		TT_THROW_TYPE("Call of socket() failed!");
 		return;
 	}
 	
@@ -442,49 +344,39 @@ void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
 		String::Utf8Value val_str(val->ToString());
 		
 		if(strcmp(*val_str, "addr") == 0) {
-			obj->addr = "";
+			obj->itf_opts.addr = "";
 			if(obj->fd)
-				Tuntap::do_ifreq(tun_sock, &ifr, &ifr.ifr_addr, "0.0.0.0", 0, SIOCSIFADDR);
+				options.push_back(tuntap_itf_opts_t::OPT_ADDR);
 		}
 		else if(strcmp(*val_str, "mtu") == 0) {
-			obj->mtu = TUNTAP_DFT_MTU;
-			ifr.ifr_mtu = obj->mtu;
+			obj->itf_opts.mtu = TUNTAP_DFT_MTU;
 			if(obj->fd)
-				Tuntap::do_ioctl(tun_sock, SIOCSIFMTU, &ifr);
+				options.push_back(tuntap_itf_opts_t::OPT_MTU);
 		}
 		else if(strcmp(*val_str, "persist") == 0) {
-			obj->is_persistant = TUNTAP_DFT_PERSIST;
+			obj->itf_opts.is_persistant = TUNTAP_DFT_PERSIST;
 			if(obj->fd)
-				Tuntap::do_ioctl(obj->fd, TUNSETPERSIST, obj->is_persistant?1:0);
+				options.push_back(tuntap_itf_opts_t::OPT_PERSIST);
 		}
 		else if(strcmp(*val_str, "up") == 0) {
-			obj->is_up = TUNTAP_DFT_UP;
-			if(obj->fd) {
-				Tuntap::do_ioctl(tun_sock, SIOCGIFFLAGS, &ifr);
-				if(obj->is_up)
-					ifr.ifr_flags |= IFF_UP;
-				else
-					ifr.ifr_flags &= ~(IFF_UP);
-				Tuntap::do_ioctl(tun_sock, SIOCSIFFLAGS, &ifr);
-			}
+			obj->itf_opts.is_up = TUNTAP_DFT_UP;
+			if(obj->fd)
+				options.push_back(tuntap_itf_opts_t::OPT_UP);
 		}
 		else if(strcmp(*val_str, "running") == 0) {
-			obj->is_running = TUNTAP_DFT_RUNNING;
-			if(obj->fd) {
-				Tuntap::do_ioctl(tun_sock, SIOCGIFFLAGS, &ifr);
-				if(obj->is_up)
-					ifr.ifr_flags |= IFF_RUNNING;
-				else
-					ifr.ifr_flags &= ~(IFF_RUNNING);
-				Tuntap::do_ioctl(tun_sock, SIOCSIFFLAGS, &ifr);
-			}
+			obj->itf_opts.is_running = TUNTAP_DFT_RUNNING;
+			if(obj->fd)
+				options.push_back(tuntap_itf_opts_t::OPT_RUNNING);
 		}
 		else if(strcmp(*val_str, "ethtype_comp") == 0) {
-			obj->ethtype_comp = TUNTAP_ETCOMP_NONE;
+			obj->itf_opts.ethtype_comp = TUNTAP_ETCOMP_NONE;
 		}
 	}
 	
-	::close(tun_sock);
+	if(!tuntapItfSet(options, obj->itf_opts, &err_str)) {
+		TT_THROW_TYPE(err_str.c_str());
+		return;
+	}
 	
 	args.GetReturnValue().Set(args.This());
 }
@@ -523,62 +415,47 @@ void Tuntap::objset(Handle<Object> obj) {
 		
 		if(strcmp(*key_str, "type") == 0) {
 			if(strcmp(*val_str, "tun") == 0) {
-				this->mode = MODE_TUN;
+				this->itf_opts.mode = tuntap_itf_opts_t::MODE_TUN;
 			}
 			else if(strcmp(*val_str, "tap") == 0) {
-				this->mode = MODE_TAP;
+				this->itf_opts.mode = tuntap_itf_opts_t::MODE_TAP;
 			}
 		}
 		else if(strcmp(*key_str, "name") == 0) {
-			this->itf_name = *val_str;
+			this->itf_opts.itf_name = *val_str;
 		}
 		else if(strcmp(*key_str, "addr") == 0) {
-			this->addr = *val_str;
+			this->itf_opts.addr = *val_str;
 		}
 		else if(strcmp(*key_str, "mask") == 0) {
-			this->mask = *val_str;
+			this->itf_opts.mask = *val_str;
 		}
 		else if(strcmp(*key_str, "dest") == 0) {
-			this->dest = *val_str;
+			this->itf_opts.dest = *val_str;
 		}
 		else if(strcmp(*key_str, "mtu") == 0) {
-			this->mtu = val->ToInteger()->Value();
-			if(this->mtu <= 50)
-				this->mtu = 50;
+			this->itf_opts.mtu = val->ToInteger()->Value();
+			if(this->itf_opts.mtu <= 50)
+				this->itf_opts.mtu = 50;
 		}
 		else if(strcmp(*key_str, "persist") == 0) {
-			this->is_persistant = val->ToBoolean()->Value();
+			this->itf_opts.is_persistant = val->ToBoolean()->Value();
 		}
 		else if(strcmp(*key_str, "up") == 0) {
-			this->is_up = val->ToBoolean()->Value();
+			this->itf_opts.is_up = val->ToBoolean()->Value();
 		}
 		else if(strcmp(*key_str, "running") == 0) {
-			this->is_running = val->ToBoolean()->Value();
+			this->itf_opts.is_running = val->ToBoolean()->Value();
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
 			String::Utf8Value val_str(val->ToString());
 			
 			if(strcmp(*val_str, "none") == 0)
-				this->ethtype_comp = TUNTAP_ETCOMP_NONE;
+				this->itf_opts.ethtype_comp = TUNTAP_ETCOMP_NONE;
 			else if(strcmp(*val_str, "half") == 0)
-				this->ethtype_comp = TUNTAP_ETCOMP_HALF;
+				this->itf_opts.ethtype_comp = TUNTAP_ETCOMP_HALF;
 			else if(strcmp(*val_str, "full") == 0)
-				this->ethtype_comp = TUNTAP_ETCOMP_FULL;
-		}
-	}
-}
-
-void Tuntap::ifreq_prep(struct ifreq *ifr, const char *itf_name) {
-	memset(ifr, 0, sizeof(*ifr));
-	
-	if(itf_name != NULL) {
-		int len = strlen(itf_name);
-		if(len > 0) {
-			strncpy(
-				ifr->ifr_name,
-				itf_name,
-				(IFNAMSIZ < len ? IFNAMSIZ : len)
-			);
+				this->itf_opts.ethtype_comp = TUNTAP_ETCOMP_FULL;
 		}
 	}
 }
@@ -625,17 +502,17 @@ void Tuntap::do_read() {
 	Local<Object> ret_buff;
 	int ret;
 	
-	ret = read(this->fd, this->read_buff, this->mtu + 4);
+	ret = read(this->fd, this->read_buff, this->itf_opts.mtu + 4);
 	
 	if(ret <= 0) {
 		printf("PHAYL1\n");
 	}
 	
 #if defined(V8_MAJOR_VERSION) && (V8_MAJOR_VERSION > 4 || (V8_MAJOR_VERSION == 4 && defined(V8_MINOR_VERSION) && V8_MINOR_VERSION >= 3))
-	if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+	if(this->itf_opts.ethtype_comp == TUNTAP_ETCOMP_HALF) {
 		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 2, ret - 2).ToLocalChecked();
 	}
-	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
+	else if(this->itf_opts.ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
 		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 3, ret - 3).ToLocalChecked();
@@ -644,10 +521,10 @@ void Tuntap::do_read() {
 		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff, ret).ToLocalChecked();
 	}
 #else
-	if(this->ethtype_comp == TUNTAP_ETCOMP_HALF) {
+	if(this->itf_opts.ethtype_comp == TUNTAP_ETCOMP_HALF) {
 		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 2, ret - 2);
 	}
-	else if(this->ethtype_comp == TUNTAP_ETCOMP_FULL) {
+	else if(this->itf_opts.ethtype_comp == TUNTAP_ETCOMP_FULL) {
 		uint8_t etval = EtherTypes::getId(be32toh(*(uint32_t*) this->read_buff));
 		this->read_buff[3] = etval;
 		ret_buff = node::Buffer::Copy(isolate, (char*) this->read_buff + 3, ret - 3);
