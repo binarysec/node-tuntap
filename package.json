@@ -1,6 +1,6 @@
 {
-  "name": "node-tuntap",
-  "version": "1.0.6",
+  "name": "@findoff/node-tuntap",
+  "version": "2.0.0",
   "description": "Tunnel interface management in node",
   "author": "Maxime Ferrino",
   "repository": {
@@ -20,9 +20,9 @@
   },
   "gypfile": true,
   "bugs": {
-    "url": "https://github.com/binarysec/node-tuntap/issues"
+    "url": "https://github.com/findoff/node-tuntap/issues"
   },
-  "homepage": "https://github.com/binarysec/node-tuntap",
+  "homepage": "https://github.com/findoff/node-tuntap",
   "license": "GPLv3",
   "os" : [ "!win32" ]
 }

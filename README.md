@@ -1,6 +1,9 @@
 node-tuntap
 ===========
 
+Forked for node v12 compatibility
+---------------------------------
+
 Node-tuntap is a node module that allows creating and using [`tun` and `tap`
 interfaces](https://en.wikipedia.org/wiki/TUN/TAP) in javascript.
 
