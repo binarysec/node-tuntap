@@ -23,7 +23,7 @@
 
 using namespace v8;
 
-void InitAll(Handle<Object> exports, Handle<Object> module) {
+void InitAll(Local<Object> exports, Local<Object> module) {
 	Tuntap::Init(module);
 }
 
