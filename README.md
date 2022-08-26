@@ -1,7 +1,7 @@
 node-tuntap
 ===========
 
-Forked for node v12 compatibility
+Forked for node v16 compatibility
 ---------------------------------
 
 Node-tuntap is a node module that allows creating and using [`tun` and `tap`

@@ -43,10 +43,10 @@
 #include "tuntap.hh"
 
 #define TT_THROW(str) \
-	isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, str)))
+	isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, str).ToLocalChecked()))
 
 #define TT_THROW_TYPE(str) \
-	isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, str)))
+	isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, str).ToLocalChecked()))
 
 #define NVM_NEW_INSTANCE(target, isolate, argc, argv) ( \
 	(target) \

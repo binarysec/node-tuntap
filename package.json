@@ -1,11 +1,11 @@
 {
-  "name": "@findoff/node-tuntap",
-  "version": "2.0.0",
+  "name": "@gtnoble/node-tuntap",
+  "version": "3.0.0",
   "description": "Tunnel interface management in node",
-  "author": "Maxime Ferrino",
+  "author": "Garret Noble",
   "repository": {
     "type": "git",
-    "url": "https://github.com/binarysec/node-tuntap.git"
+    "url": "https://github.com/gtnoble/node-tuntap.git"
   },
   "keywords": [
     "tunnel",
@@ -20,9 +20,11 @@
   },
   "gypfile": true,
   "bugs": {
-    "url": "https://github.com/findoff/node-tuntap/issues"
+    "url": "https://github.com/gtnoble/node-tuntap/issues"
   },
-  "homepage": "https://github.com/findoff/node-tuntap",
+  "homepage": "https://github.com/gtnoble/node-tuntap",
   "license": "GPLv3",
-  "os" : [ "!win32" ]
+  "os": [
+    "!win32"
+  ]
 }
