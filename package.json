@@ -1,6 +1,6 @@
 {
   "name": "@gtnoble/node-tuntap",
-  "version": "3.0.0",
+  "version": "2.1.0",
   "description": "Tunnel interface management in node",
   "author": "Garret Noble",
   "repository": {
@@ -14,10 +14,13 @@
     "tuntap",
     "interface"
   ],
-  "main": "./index.js",
-  "scripts": {
-    "install": "node-gyp rebuild"
+  "dependencies": {
+    "node-gyp": ">=9.1.0"
   },
+  "devDependencies": {
+    "node-gyp": ">=9.1.0"
+  },
+  "main": "./index.js",
   "gypfile": true,
   "bugs": {
     "url": "https://github.com/gtnoble/node-tuntap/issues"
