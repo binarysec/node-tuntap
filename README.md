@@ -37,11 +37,7 @@ Simple sample :
 
 Building/installing
 -------------------
-
-To build the module, just run `make`. *node-gyp* is required to build it.
-
-There is currently no way to install it. You will have to copy the files in 
-the right places by hand.
+`npm install @gtnoble/node-tuntap`
 
 Available options
 -----------------
