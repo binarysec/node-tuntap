@@ -26,7 +26,7 @@
 
 class Tuntap : public node::ObjectWrap {
 	public:
-		static void Init(v8::Handle<v8::Object> module);
+		static void Init(v8::Local<v8::Object> module);
 		
 	private:
 		Tuntap();
@@ -62,8 +62,8 @@ class Tuntap : public node::ObjectWrap {
 			int size;
 		};
 		
-		bool construct(v8::Handle<v8::Object> main_obj, std::string &error);
-		void objset(v8::Handle<v8::Object> obj);
+		bool construct(v8::Local<v8::Object> main_obj, std::string &error);
+		void objset(v8::Local<v8::Object> obj);
 		static void writeBuffer(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void open(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void close(const v8::FunctionCallbackInfo<v8::Value>& args);

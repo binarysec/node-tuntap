@@ -41,12 +41,13 @@ Tuntap::~Tuntap() {
 		delete[] this->read_buff;
 }
 
-void Tuntap::Init(Handle<Object> module) {
+void Tuntap::Init(Local<Object> module) {
 	Isolate* isolate = module->GetIsolate();
+	Local<Context> context = isolate->GetCurrentContext();
 	
 	// Prepare constructor template
 	Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
-	tpl->SetClassName(String::NewFromUtf8(isolate, "tuntap"));
+	tpl->SetClassName(String::NewFromUtf8(isolate, "tuntap").ToLocalChecked());
 	tpl->InstanceTemplate()->SetInternalFieldCount(1);
 	
 	// Prototype
@@ -62,14 +63,15 @@ void Tuntap::Init(Handle<Object> module) {
 	
 #undef SETFUNC
 	
-	constructor.Reset(isolate, tpl->GetFunction());
+	constructor.Reset(isolate, tpl->GetFunction(context).ToLocalChecked());
 	
-	module->Set(String::NewFromUtf8(isolate, "exports"), tpl->GetFunction());
+	module->Set(context, String::NewFromUtf8(isolate, "exports").ToLocalChecked(), tpl->GetFunction(context).ToLocalChecked());
 }
 
 void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
 	HandleScope scope(isolate);
+	Local<Context> context = isolate->GetCurrentContext();
 	bool ret;
 	std::string err_str;
 	Local<Object> main_obj;
@@ -80,7 +82,7 @@ void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
 		obj = new Tuntap();
 		obj->Wrap(args.This());
 		if(args[0]->IsObject()) {
-			main_obj = args[0]->ToObject();
+			main_obj = args[0]->ToObject(context).ToLocalChecked();
 			ret = obj->construct(main_obj, err_str);
 			if(ret == false) {
 				obj->fd = -1;
@@ -100,7 +102,7 @@ void Tuntap::New(const FunctionCallbackInfo<Value>& args) {
 	}
 }
 
-bool Tuntap::construct(Handle<Object> main_obj, std::string &error) {
+bool Tuntap::construct(Local<Object> main_obj, std::string &error) {
 	Isolate* isolate = main_obj->GetIsolate();
 	HandleScope scope(isolate);
 	Local<Array> keys_arr;
@@ -195,6 +197,7 @@ void Tuntap::writeBuffer(const FunctionCallbackInfo<Value>& args) {
 }
 void Tuntap::open(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
+	Local<Context> context = isolate->GetCurrentContext();
 	HandleScope scope(isolate);
 	Local<Object> main_obj = Object::New(isolate);
 	std::string err_str;
@@ -212,7 +215,7 @@ void Tuntap::open(const FunctionCallbackInfo<Value>& args) {
 			return;
 		}
 		
-		main_obj = args[0]->ToObject();
+		main_obj = args[0]->ToObject(context).ToLocalChecked();
 	}
 	
 	ret = obj->construct(main_obj, err_str);
@@ -246,6 +249,7 @@ void Tuntap::close(const FunctionCallbackInfo<Value>& args) {
 
 void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
+	Local<Context> context = isolate->GetCurrentContext();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	std::vector<tuntap_itf_opts_t::option_e> options;
@@ -260,20 +264,20 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 		return;
 	}
 	
-	main_obj = args[0]->ToObject();
+	main_obj = args[0]->ToObject(context).ToLocalChecked();
 	
-	if(main_obj->Has(String::NewFromUtf8(isolate, "type")) || main_obj->Has(String::NewFromUtf8(isolate, "name"))) {
+	if(main_obj->Has(context, String::NewFromUtf8(isolate, "type").ToLocalChecked()).ToChecked() || main_obj->Has(context, String::NewFromUtf8(isolate, "name").ToLocalChecked()).ToChecked()) {
 		TT_THROW_TYPE("Cannot set name and type from this function!");
 		return;
 	}
 	
 	obj->objset(main_obj);
 	
-	keys_arr = main_obj->GetPropertyNames();
+	keys_arr = main_obj->GetPropertyNames(context).ToLocalChecked();
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
-		key = keys_arr->Get(i);
-		val = main_obj->Get(key);
-		String::Utf8Value key_str(key->ToString());
+		key = keys_arr->Get(context, i).ToLocalChecked();
+		val = main_obj->Get(context, key).ToLocalChecked();
+		String::Utf8Value key_str(isolate, key);
 		
 		if(strcmp(*key_str, "addr") == 0) {
 			if(obj->fd)
@@ -304,7 +308,7 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 				options.push_back(tuntap_itf_opts_t::OPT_RUNNING);
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
-			String::Utf8Value val_str(val->ToString());
+			String::Utf8Value val_str(isolate, val);
 			
 			if(strcmp(*val_str, "none") == 0)
 				obj->itf_opts.ethtype_comp = TUNTAP_ETCOMP_NONE;
@@ -325,6 +329,7 @@ void Tuntap::set(const FunctionCallbackInfo<Value>& args) {
 
 void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();
+	Local<Context> context = isolate->GetCurrentContext();
 	HandleScope scope(isolate);
 	Tuntap *obj = ObjectWrap::Unwrap<Tuntap>(args.This());
 	std::vector<tuntap_itf_opts_t::option_e> options;
@@ -340,8 +345,8 @@ void Tuntap::unset(const FunctionCallbackInfo<Value>& args) {
 	keys_arr = args[0].As<Array>();
 	
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
-		val = keys_arr->Get(i);
-		String::Utf8Value val_str(val->ToString());
+		val = keys_arr->Get(context, i).ToLocalChecked();
+		String::Utf8Value val_str(isolate, val);
 		
 		if(strcmp(*val_str, "addr") == 0) {
 			obj->itf_opts.addr = "";
@@ -401,17 +406,20 @@ void Tuntap::startRead(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(args.This());
 }
 
-void Tuntap::objset(Handle<Object> obj) {
+void Tuntap::objset(Local<Object> obj) {
+	Isolate* isolate = obj->GetIsolate();
+	Local<Context> context = isolate->GetCurrentContext();
+
 	Local<Array> keys_arr;
 	Local<Value> key;
 	Local<Value> val;
 	
-	keys_arr = obj->GetPropertyNames();
+	keys_arr = obj->GetPropertyNames(context).ToLocalChecked();
 	for (unsigned int i = 0, limiti = keys_arr->Length(); i < limiti; i++) {
-		key = keys_arr->Get(i);
-		val = obj->Get(key);
-		String::Utf8Value key_str(key->ToString());
-		String::Utf8Value val_str(val->ToString());
+		key = keys_arr->Get(context, i).ToLocalChecked();
+		val = obj->Get(context, key).ToLocalChecked();
+		String::Utf8Value key_str(isolate, key);
+		String::Utf8Value val_str(isolate, val);
 		
 		if(strcmp(*key_str, "type") == 0) {
 			if(strcmp(*val_str, "tun") == 0) {
@@ -434,21 +442,21 @@ void Tuntap::objset(Handle<Object> obj) {
 			this->itf_opts.dest = *val_str;
 		}
 		else if(strcmp(*key_str, "mtu") == 0) {
-			this->itf_opts.mtu = val->ToInteger()->Value();
+			this->itf_opts.mtu = val->ToInteger(context).ToLocalChecked()->Value();
 			if(this->itf_opts.mtu <= 50)
 				this->itf_opts.mtu = 50;
 		}
 		else if(strcmp(*key_str, "persist") == 0) {
-			this->itf_opts.is_persistant = val->ToBoolean()->Value();
+			this->itf_opts.is_persistant = val->ToBoolean(isolate)->Value();
 		}
 		else if(strcmp(*key_str, "up") == 0) {
-			this->itf_opts.is_up = val->ToBoolean()->Value();
+			this->itf_opts.is_up = val->ToBoolean(isolate)->Value();
 		}
 		else if(strcmp(*key_str, "running") == 0) {
-			this->itf_opts.is_running = val->ToBoolean()->Value();
+			this->itf_opts.is_running = val->ToBoolean(isolate)->Value();
 		}
 		else if(strcmp(*key_str, "ethtype_comp") == 0) {
-			String::Utf8Value val_str(val->ToString());
+			String::Utf8Value val_str(isolate, val);
 			
 			if(strcmp(*val_str, "none") == 0)
 				this->itf_opts.ethtype_comp = TUNTAP_ETCOMP_NONE;
